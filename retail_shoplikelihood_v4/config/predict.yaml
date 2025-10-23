@@ -1,0 +1,51 @@
+# job metadata
+owner: svc.lore
+type: preprocessing
+version: 0
+is_enabled: True
+
+# VertexAI Project spec
+project: dp-lore
+bq_project: dp-lore
+location: us-central1
+
+# VertexAI Custom Job spec
+display_name: shoplikelihood_v4_
+script_path: mlmodels/ctr_shoplikelihood_v4/predict.py
+container_uri: us-docker.pkg.dev/vertex-ai/training/sklearn-cpu.1-6:latest
+requirements:
+  - python-json-logger>=2.0.2
+  - bigframes==0.22.0
+  - ibis-framework>=7.1.0,<8.0.0  
+  - sqlglot>=18.12.0,<20
+  - pyarrow<15,>=2
+  - fastparquet
+  - numpy<1.26,>=1.16.0
+  - pandas!=1.4.0,<2.1,>1.1
+  - gcsfs
+  - ruamel.yaml
+  - protobuf<=4.20.0
+  - db-dtypes
+  - google-cloud-bigquery[bqstorage]
+  - google-api-core<2.0.0,>=1.13.0
+  - google-api-python-client>=1.12.0,<2.0.0
+  - imbalanced-learn
+  - optuna>=3.0.0
+  - xgboost>=2.0.0
+  - lightgbm>=4.0.0
+  - scikit-learn>=1.0.2
+  - shap>=0.41.0
+# - tensorflow>=2.12.0
+replica_count: 1
+machine_type: n2-highmem-80
+accelerator_type: ACCELERATOR_TYPE_UNSPECIFIED
+accelerator_count: 4
+boot_disk_type: pd-ssd
+boot_disk_size_gb: 500
+staging_bucket: gs://hybrid_recom_lightfm_bucket/ctr/model_registry/non_offer_view_first_segment
+timeout: 36000
+enable_web_access: true
+# Metadata Logging spec, BigQuery Table
+job_metadata_table_path: hybrid_recom_lightfm_ctr.cia_vertexai_job_metadata
+# machine_type: n1-highmem-96
+# accelerator_type: NVIDIA_TESLA_T4

@@ -1,0 +1,33 @@
+# job metadata
+owner: svc.lore
+type: preprocessing
+version: 0
+is_enabled: True
+
+# VertexAI Project spec
+project: dp-lore
+bq_project: dp-lore
+location: us-central1
+
+# VertexAI Custom Job spec
+display_name: shoplikelihood_v4_
+script_path: mlmodels/ctr_shoplikelihood_v4/data/generate_embeddings.py
+container_uri: us-docker.pkg.dev/vertex-ai/training/scikit-learn-cpu.0-23:latest
+requirements:
+  - lightfm
+  - pyarrow
+  - fastparquet
+  - gcsfs
+  - ruamel.yaml
+replica_count: 1
+machine_type: n2-highmem-80
+accelerator_type: ACCELERATOR_TYPE_UNSPECIFIED
+accelerator_count: 0
+boot_disk_type: pd-ssd
+boot_disk_size_gb: 500
+staging_bucket: gs://hybrid_recom_lightfm_bucket/ctr/model_registry/non_offer_view_first_segment
+timeout: 36000
+enable_web_access: true
+# Store pre-compute features
+# Metadata Logging spec, BigQuery Table
+job_metadata_table_path: hybrid_recom_lightfm_ctr.cia_vertexai_job_metadata
