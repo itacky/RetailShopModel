@@ -39,17 +39,6 @@ def load_reco_reference_df(bq_client):
     """
     return load_from_bigquery(query=query, bq_client=bq_client)
 
-def load_triangle_lifecycle_segment_df(bq_client, tlc_date, segment):
-    logger.info("Loading triangle lifecycle segment table...")
-    query = f""" 
-    SELECT 
-        epsilon_id
-    FROM `dp-lore.loyalty_reco.customer_lifecycle`
-    WHERE dateid= '{tlc_date}'
-    and status = '{segment}'
-    """
-    return load_from_bigquery(query=query, bq_client=bq_client)
-
 
 def batch_upload_to_bigquery(batch_size, df, table_name, source_format, bq_client):
     """Upload DataFrame to BigQuery in chunks."""
@@ -104,8 +93,6 @@ if __name__ == "__main__":
     target_week_identifier = os.environ.get('target_week_identifier')
     statistic_features_path = os.environ.get('statistic_features_path')
     model_output_path = os.environ.get('model_output_path')
-    tlc_segment = 'Onboarding'
-
 
 
     logger.info("Starting bigquery client and GCS file system...")
@@ -128,11 +115,6 @@ if __name__ == "__main__":
     #==============================================
     reco_reference_pd = load_reco_reference_df(bq_client=bq_client)
     
-
-    #triangle_lifecycle_segment data
-    tlc_end_date = reco_reference_pd[reco_reference_pd["week_identifier"] == week_identifier].end_date.iloc[0]
-    tlc_segments_df = load_triangle_lifecycle_segment_df(bq_client=bq_client, tlc_date=tlc_end_date, segment=tlc_segment)
-    logger.info(f"Loaded {len(tlc_segments_df)} triangle lifecycle segment records for segment '{tlc_segment}'. Date: {tlc_end_date}")
 
     # Embedding mapping table
     logger.info(f"Loading LightFM embeddings from: {gcs_embeddings_output_path}")

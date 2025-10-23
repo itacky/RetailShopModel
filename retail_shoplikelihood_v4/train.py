@@ -110,7 +110,7 @@ def load_from_bigquery(query, bq_client):
 
 
 def load_reco_reference_df(bq_client):
-    logger.info("Loading deal week reference table...")
+    print("Loading deal week reference table...")
     query = """ 
     SELECT 
         start_date, 
@@ -120,18 +120,6 @@ def load_reco_reference_df(bq_client):
         CONCAT(CAST(deal_yr AS STRING), '_3', LPAD(CAST(deal_wk AS STRING), 2, '0')) AS week_identifier,
         deal_season_num
     from `dp-lore.loyalty_reco.prd_slpv3_date_ref` 
-    """
-    return load_from_bigquery(query=query, bq_client=bq_client)
-
-
-def load_triangle_lifecycle_segment_df(bq_client, tlc_date, segment):
-    logger.info("Loading triangle lifecycle segment table...")
-    query = f""" 
-    SELECT 
-        epsilon_id
-    FROM `dp-lore.loyalty_reco.customer_lifecycle`
-    WHERE dateid= '{tlc_date}'
-    and status = '{segment}'
     """
     return load_from_bigquery(query=query, bq_client=bq_client)
 
@@ -254,7 +242,7 @@ def hyperparameter_optimization(X, y):
     logger.info("Starting hyperparameter optimization with Optuna...")
 
     # Stratified sample for faster search
-    sample_size = 250000/len(y) if len(y) > 250000 else 0.8
+    sample_size = 250000/len(y) if len(y) > 250000 else 1.0
     X_sample, _, y_sample, _ = train_test_split(
         X, y, train_size=sample_size, random_state=42, stratify=y
     )
@@ -464,7 +452,6 @@ if __name__ == "__main__":
     model_output_path = os.environ.get('model_output_path')
     model_features_path = os.environ.get('model_features_path')
     model_performance_output_table = os.environ.get('model_performance_output_table')
-    tlc_segment = 'Onboarding'
 
 
     logger.info("Starting bigquery client and GCS file system...")
@@ -474,11 +461,6 @@ if __name__ == "__main__":
 
     reco_reference_pd = load_reco_reference_df(bq_client=bq_client)
     
-    #triangle_lifecycle_segment data
-    tlc_end_date = reco_reference_pd[reco_reference_pd["week_identifier"] == week_identifier].end_date.iloc[0]
-    tlc_segments_df = load_triangle_lifecycle_segment_df(bq_client=bq_client, tlc_date=tlc_end_date, segment=tlc_segment)
-    logger.info(f"Loaded {len(tlc_segments_df)} triangle lifecycle segment records for segment '{tlc_segment}'. Date: {tlc_end_date}")
-
     # Customer purchase labels
     logger.info(f"Loading customer purchase labels from: {customer_purchase_labels_path}")
     customer_purchase_labels = [_path for _path in fs.glob(os.path.join(customer_purchase_labels_path, "*.parquet"))]
@@ -585,7 +567,7 @@ if __name__ == "__main__":
     npp_history_pivoted_df = npp_history_pivoted_df.add_suffix('_npp_flag')
 
 
-    
+
 
     # Combine Model Features DataFrame
     logger.info(embedding_df.columns.tolist())
@@ -671,64 +653,33 @@ if __name__ == "__main__":
     logger.info(f"Class distribution in training set: {y_train.value_counts().to_dict()}")
     logger.info(f"Scale pos weight for handling class imbalance: {scale_pos_weight}")
 
-    from lightgbm import LGBMClassifier
-    from catboost import CatBoostClassifier
-    from sklearn.ensemble import AdaBoostClassifier
-    from sklearn.tree import DecisionTreeClassifier
-
     # Initialize all models
+
     default_params = {
-        "n_estimators": 500,
-        "max_depth": 8,
-        "learning_rate": 0.05,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "scale_pos_weight": scale_pos_weight,
-        "tree_method": 'hist',
-        "n_jobs": -1,
-        "random_state": 42
-    }
+        "n_estimators":500,
+        "max_depth":8,
+        "learning_rate":0.05,
+        "subsample":0.8,
+        "colsample_bytree":0.8,
+        "scale_pos_weight":scale_pos_weight,
+        "tree_method":'hist',
+        "n_jobs":-1,
+        "random_state":42
+        }   
     best_params = default_params
 
     models = {
-        'xgboost': XGBClassifier(**best_params),
-        'lightgbm': LGBMClassifier(
-            n_estimators=500,
-            max_depth=8,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            scale_pos_weight=scale_pos_weight,
-            random_state=42,
-            n_jobs=-1
+        'xgboost': XGBClassifier(**best_params
         ),
-        'catboost': CatBoostClassifier(
-            iterations=500,
-            depth=8,
-            learning_rate=0.05,
-            subsample=0.8,
-            scale_pos_weight=scale_pos_weight,
-            random_seed=42,
-            verbose=0  # Suppress CatBoost logs
-        ),
-        'adaboost': AdaBoostClassifier(
-            base_estimator=DecisionTreeClassifier(
-                max_depth=1,  # Default weak learner
-                class_weight="balanced"  # Handle class imbalance
-            ),
-            n_estimators=500,
-            learning_rate=0.05,
-            random_state=42
-        )
     }
-
+    
     # Perform hyperparameter optimization if enabled
     if hyperparameters_tuning:
         logger.info("Hyperparameter tuning is enabled. Starting optimization...")
         best_params = hyperparameter_optimization(X_train, y_train)
         logger.info(f"Best hyperparameters found: {best_params}")
 
-        # Update the XGBoost model with the best parameters
+        # Update the model with the best parameters
         models['xgboost'] = XGBClassifier(
             **best_params,
             tree_method='hist',
@@ -750,8 +701,7 @@ if __name__ == "__main__":
 
     # Perform SHAP analysis for each model
     for model_name, model in models.items():
-        if model_name in ['xgboost', 'lightgbm']:  # SHAP supports XGBoost and LightGBM
-            shap_summary_1, shap_summary_0 = shap_analysis(model, model_name, X_train_scaled, X_val_scaled, feature_cols)
+        shap_summary_1, shap_summary_0 = shap_analysis(model, model_name, X_train_scaled, X_val_scaled, feature_cols)
 
     # Compare models
     logger.info("\nModel Comparison Summary:")
@@ -761,17 +711,17 @@ if __name__ == "__main__":
             'Test AUC-ROC': results[model_name]['test_auc']
         } for model_name in models.keys()
     }).round(4)
-
+    
     logger.info("\n" + str(comparison_df))
 
     # Select best model based on validation AUC-ROC
     best_model_name = max(results.items(), key=lambda x: x[1]['val_auc'])[0]
     logger.info(f"Best performing model: {best_model_name}")
 
-    # Train final model on full dataset with best parameters
+    #Train final model on full dataset with best parameters
     X_scaled = preprocessor.fit_transform(X)
     final_model = train_final_model(models[best_model_name], X_scaled, y)
-
+    
     # Save best model
     model_name = f'best_model_{best_model_name}_{current_week_identifier}.joblib'
     save_model(model_path=model_output_path, model_name=model_name, model=final_model)
